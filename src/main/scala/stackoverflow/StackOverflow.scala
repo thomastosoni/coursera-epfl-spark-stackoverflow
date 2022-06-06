@@ -14,6 +14,16 @@ enum PostingType(val value: Int):
   case Question extends PostingType(1)
   case Answer extends PostingType(2)
 
+object PostingType {
+  def fromValue(value: String): PostingType = {
+    value match {
+      case "1" => Question
+      case "2" => Answer
+      case _ => throw new Exception("PostingType values are either 1 or 2")
+    }
+  }
+}
+
 object Aliases:
   type Question = Posting
   type Answer = Posting
@@ -46,7 +56,7 @@ object StackOverflow extends StackOverflow:
 
   /** Main function */
   def main(args: Array[String]): Unit =
-    val inputFileLocation: String = "/stackoverflow/stackoverflow-grading.csv"
+    val inputFileLocation: String = "/stackoverflow/stackoverflow.csv"
     val resource = getClass.getResourceAsStream(inputFileLocation)
     val inputFile = Source.fromInputStream(resource)(Codec.UTF8)
 
@@ -55,11 +65,12 @@ object StackOverflow extends StackOverflow:
     val grouped = groupedPostings(raw)
     val scored  = scoredPostings(grouped)
     val vectors = vectorPostings(scored)
-//    assert(vectors.count() == 1042132, "Incorrect number of vectors: " + vectors.count())
+    val vectorsCount = vectors.count()
+    assert(vectorsCount == 1042132, "Incorrect number of vectors: " + vectors.count())
 
-    val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
-    val results = clusterResults(means, vectors)
-    printResults(results)
+//    val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
+//    val results = clusterResults(means, vectors)
+//    printResults(results)
 
 /** The parsing and kmeans methods */
 class StackOverflow extends StackOverflowInterface with Serializable:
@@ -96,7 +107,7 @@ class StackOverflow extends StackOverflowInterface with Serializable:
     lines.map(line => {
       val arr = line.split(",")
       Posting(
-        postingType =    PostingType.valueOf(arr(0)),
+        postingType =    PostingType.fromValue(arr(0)),
         id =             arr(1).toInt,
         acceptedAnswer = if arr(2) == "" then None else Some(arr(2).toInt),
         parentId =       if arr(3) == "" then None else Some(arr(3).toInt),
@@ -146,8 +157,11 @@ class StackOverflow extends StackOverflowInterface with Serializable:
           val index = ls.indexOf(lang)
           if (index >= 0) Some(index) else None
 
-    ???
-
+    scored.flatMap { case (question, score) =>
+      firstLangInTag(question.tags, langs).map { lang =>
+        (lang * langSpread) -> score
+      }
+    }
 
   /** Sample the vectors */
   def sampleVectors(vectors: RDD[(LangIndex, HighScore)]): Array[(Int, Int)] =

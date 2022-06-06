@@ -44,10 +44,10 @@ class StackOverflowSuite extends munit.FunSuite:
 
   test("groupedPostings works") {
     val postings = StackOverflowSuite.sc.parallelize(List(
-      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = Some("tag1")),
-      Posting(postingType = Question, id = 2, acceptedAnswer = Some(5), parentId = None, score = 6, tags = Some("tag2")),
+      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
+      Posting(postingType = Question, id = 2, acceptedAnswer = Some(5), parentId = None, score = 6, tags = None),
       Posting(postingType = Question, id = 3, acceptedAnswer = None, parentId = None, score = 9, tags = None),
-      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = Some("tag4")),
+      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
       Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(2), score = 20, tags = None)
     ))
 
@@ -68,8 +68,8 @@ class StackOverflowSuite extends munit.FunSuite:
   test("scoredPostings works") {
     val highScore = 100
     val postings = StackOverflowSuite.sc.parallelize(List(
-      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = Some("tag1")),
-      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = Some("tag4")),
+      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
+      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
       Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(1), score = highScore, tags = None)
     ))
 
@@ -78,6 +78,21 @@ class StackOverflowSuite extends munit.FunSuite:
 
     assert(scoredPostings.length == 1)
     assert(scoredPostings.head._2 == highScore)
+  }
+
+  test("vectorPostings works") {
+    val postings = StackOverflowSuite.sc.parallelize(List(
+      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = Some("Scala")),
+      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = Some("Scala")),
+      Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(1), score = 100, tags = Some("Java"))
+    ))
+
+    val groupedPostings = testObject.groupedPostings(postings)
+    val scoredPostings = testObject.scoredPostings(groupedPostings)
+    val vectorPostings = testObject.vectorPostings(scoredPostings).collect()
+
+    assert(vectorPostings.nonEmpty)
+    assert(vectorPostings.head._2 == 500000)
   }
 
   import scala.concurrent.duration.given
