@@ -10,20 +10,6 @@ import scala.io.{Codec, Source}
 import scala.reflect.ClassTag
 import scala.util.Properties.isWin
 
-enum PostingType(val value: Int):
-  case Question extends PostingType(1)
-  case Answer extends PostingType(2)
-
-object PostingType {
-  def fromValue(value: String): PostingType = {
-    value match {
-      case "1" => Question
-      case "2" => Answer
-      case _ => throw new Exception("PostingType values are either 1 or 2")
-    }
-  }
-}
-
 object Aliases:
   type Question = Posting
   type Answer = Posting
@@ -35,7 +21,7 @@ import stackoverflow.Aliases.*
 
 /** A raw stackoverflow posting, either a question or an answer */
 case class Posting(
-  postingType: PostingType,
+  postingType: Int,
   id: Int,
   acceptedAnswer: Option[Int],
   parentId: Option[QID],
@@ -68,9 +54,9 @@ object StackOverflow extends StackOverflow:
     val vectorsCount = vectors.count()
     assert(vectorsCount == 1042132, "Incorrect number of vectors: " + vectors.count())
 
-//    val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
-//    val results = clusterResults(means, vectors)
-//    printResults(results)
+    val means   = kmeans(sampleVectors(vectors), vectors, debug = true)
+    val results = clusterResults(means, vectors)
+    printResults(results)
 
 /** The parsing and kmeans methods */
 class StackOverflow extends StackOverflowInterface with Serializable:
@@ -107,7 +93,7 @@ class StackOverflow extends StackOverflowInterface with Serializable:
     lines.map(line => {
       val arr = line.split(",")
       Posting(
-        postingType =    PostingType.fromValue(arr(0)),
+        postingType =    arr(0).toInt,
         id =             arr(1).toInt,
         acceptedAnswer = if arr(2) == "" then None else Some(arr(2).toInt),
         parentId =       if arr(3) == "" then None else Some(arr(3).toInt),
@@ -119,11 +105,11 @@ class StackOverflow extends StackOverflowInterface with Serializable:
   /** Group the questions and answers together */
   def groupedPostings(postings: RDD[Posting]): RDD[(QID, Iterable[(Question, Answer)])] =
     val questions: RDD[(QID, Question)] = postings
-      .filter(_.postingType == PostingType.Question)
+      .filter(_.postingType == 1)
       .map(q => q.id -> q)
 
     val answers: RDD[(QID, Answer)]  = postings
-      .filter(p => p.postingType == PostingType.Answer && p.parentId.nonEmpty)
+      .filter(p => p.postingType == 2 && p.parentId.nonEmpty)
       .map(a => a.parentId.get -> a)
 
     questions.join(answers).groupByKey()
@@ -209,12 +195,25 @@ class StackOverflow extends StackOverflowInterface with Serializable:
   //
 
   /** Main kmeans computation */
-  @tailrec final def kmeans(means: Array[(Int, Int)], vectors: RDD[(Int, Int)], iter: Int = 1, debug: Boolean = false): Array[(Int, Int)] =
-    // TODO: Compute the groups of points that are the closest to each mean,
-    // and then compute the new means of each group of points. Finally, compute
-    // a Map that associate the old `means` values to their new values
-    val newMeansMap: scala.collection.Map[(Int, Int), (Int, Int)] = ???
+  @tailrec final def kmeans(
+    means: Array[(Int, Int)],
+    vectors: RDD[(Int, Int)],
+    iter: Int = 1,
+    debug: Boolean = false
+  ): Array[(Int, Int)] =
+    // Compute the groups of points that are the closest to each mean.
+    val closestGroups = vectors.groupBy { vector =>
+      findClosest(vector, means)
+    }
+
+    // Then compute the new means of each group of points.
+    val groupsNewMeans = closestGroups.mapValues(averageVectors)
+
+    // Finally, compute a Map that associate the old `means` values to their new values
+    val newMeansMap: scala.collection.Map[(Int, Int), (Int, Int)] = groupsNewMeans.collectAsMap()
+
     val newMeans: Array[(Int, Int)] = means.map(oldMean => newMeansMap(oldMean))
+
     val distance = euclideanDistance(means, newMeans)
 
     if debug then
@@ -303,10 +302,23 @@ class StackOverflow extends StackOverflowInterface with Serializable:
     val closestGrouped = closest.groupByKey()
 
     val median = closestGrouped.mapValues { vs =>
-      val langLabel: String   = ??? // most common language in the cluster
-      val langPercent: Double = ??? // percent of the questions in the most common language
-      val clusterSize: Int    = ???
-      val medianScore: Int    = ???
+      val (topLangIndex, topLangScoreSize) = vs.groupBy(_._1).view
+        .mapValues(_.size)
+        .maxBy(_._2)
+
+      // most common language in the cluster
+      val langLabel: String   = langs(topLangIndex / langSpread)
+
+      // percent of the questions in the most common language
+      val langPercent: Double = (topLangScoreSize.toDouble / vs.size.toDouble) * 100d
+
+      val clusterSize: Int    = vs.size
+
+      val medianScore: Int    =  {
+        val scores = vs.toList.map(_._2).sorted
+        val mid = scores.length / 2
+        if (scores.length % 2 == 0) (scores(mid) + scores(mid - 1)) / 2 else scores(mid)
+      }
 
       (langLabel, langPercent, clusterSize, medianScore)
     }

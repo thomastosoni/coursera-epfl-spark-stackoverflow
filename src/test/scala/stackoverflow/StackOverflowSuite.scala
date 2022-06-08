@@ -4,7 +4,6 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.SparkContext.*
 import org.apache.spark.rdd.RDD
 import stackoverflow.Aliases.Answer
-import stackoverflow.PostingType.*
 import stackoverflow.StackOverflow.{getClass, sc}
 import stackoverflow.StackOverflowSuite.getClass
 
@@ -44,11 +43,11 @@ class StackOverflowSuite extends munit.FunSuite:
 
   test("groupedPostings works") {
     val postings = StackOverflowSuite.sc.parallelize(List(
-      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
-      Posting(postingType = Question, id = 2, acceptedAnswer = Some(5), parentId = None, score = 6, tags = None),
-      Posting(postingType = Question, id = 3, acceptedAnswer = None, parentId = None, score = 9, tags = None),
-      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
-      Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(2), score = 20, tags = None)
+      Posting(postingType = 1, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
+      Posting(postingType = 1, id = 2, acceptedAnswer = Some(5), parentId = None, score = 6, tags = None),
+      Posting(postingType = 1, id = 3, acceptedAnswer = None, parentId = None, score = 9, tags = None),
+      Posting(postingType = 2, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
+      Posting(postingType = 2, id = 5, acceptedAnswer = None, parentId = Some(2), score = 20, tags = None)
     ))
 
     val groupedPostings = testObject.groupedPostings(postings)
@@ -68,9 +67,9 @@ class StackOverflowSuite extends munit.FunSuite:
   test("scoredPostings works") {
     val highScore = 100
     val postings = StackOverflowSuite.sc.parallelize(List(
-      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
-      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
-      Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(1), score = highScore, tags = None)
+      Posting(postingType = 1, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = None),
+      Posting(postingType = 2, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = None),
+      Posting(postingType = 2, id = 5, acceptedAnswer = None, parentId = Some(1), score = highScore, tags = None)
     ))
 
     val groupedPostings = testObject.groupedPostings(postings)
@@ -82,9 +81,9 @@ class StackOverflowSuite extends munit.FunSuite:
 
   test("vectorPostings works") {
     val postings = StackOverflowSuite.sc.parallelize(List(
-      Posting(postingType = Question, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = Some("Scala")),
-      Posting(postingType = Answer, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = Some("Scala")),
-      Posting(postingType = Answer, id = 5, acceptedAnswer = None, parentId = Some(1), score = 100, tags = Some("Java"))
+      Posting(postingType = 1, id = 1, acceptedAnswer = Some(4), parentId = None, score = 3, tags = Some("Scala")),
+      Posting(postingType = 2, id = 4, acceptedAnswer = None, parentId = Some(1), score = 10, tags = Some("Scala")),
+      Posting(postingType = 2, id = 5, acceptedAnswer = None, parentId = Some(1), score = 100, tags = Some("Java"))
     ))
 
     val groupedPostings = testObject.groupedPostings(postings)
@@ -92,7 +91,7 @@ class StackOverflowSuite extends munit.FunSuite:
     val vectorPostings = testObject.vectorPostings(scoredPostings).collect()
 
     assert(vectorPostings.nonEmpty)
-    assert(vectorPostings.head._2 == 500000)
+    assert(vectorPostings.head._1 == 10 * 50000) // Scala's language id * lang spread
   }
 
   import scala.concurrent.duration.given
